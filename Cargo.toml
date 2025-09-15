@@ -1,0 +1,17 @@
+[package]
+name = "rustsimdfun"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+# opt-in AVX-512 support
+avx512 = []
+
+[build]
+rustflags = [
+  "-C", "target-cpu=native",
+  "-C", "target-feature=+avx512f,+avx512bw,+avx512vl"
+]
+
+[dependencies]
+
