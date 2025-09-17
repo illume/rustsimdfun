@@ -214,7 +214,7 @@ pub fn average_float_portable_simd(data: &[f32]) -> f32 {
 }
 ```
 
-#### Portable SIMD 9.4x faster than serial, 2.25x faster than manual version
+#### Macbook air M4, Portable SIMD 9.4x faster than serial, 2.25x faster than manual version
 
 So How fast is in on Macbook air M4?
 
@@ -269,4 +269,53 @@ speedups:  simd = 4.18x, portable simd = 9.39x, simd/portable = 2.25x
 
 This shows one of the benefits of being able to change lanes so easily.
 Instead of rewriting the intrinsics, I changed an 8 to 16 and recompiled.
+
+#### Surface book 3, Portable SIMD 7.9x faster than serial, 1.16x faster than manual avx version
+
+```rust
+average_serial = 0.200820, average = 0.200052, average_portable = 0.200124
+diffs: serial-simd = 0.000769, serial-portable = 0.000697, simd-portable = 0.000072
+serial:          v = 0.200820, elapsed = 0.645 ms
+serial:          v = 0.200820, elapsed = 0.607 ms
+serial:          v = 0.200820, elapsed = 0.611 ms
+serial:          v = 0.200820, elapsed = 0.611 ms
+serial:          v = 0.200820, elapsed = 0.731 ms
+simd:            v = 0.200052, elapsed = 0.097 ms
+simd:            v = 0.200052, elapsed = 0.063 ms
+simd:            v = 0.200052, elapsed = 0.046 ms
+simd:            v = 0.200052, elapsed = 0.039 ms
+simd:            v = 0.200052, elapsed = 0.038 ms
+portable simd:   v = 0.200124, elapsed = 0.076 ms
+portable simd:   v = 0.200124, elapsed = 0.085 ms
+portable simd:   v = 0.200124, elapsed = 0.097 ms
+portable simd:   v = 0.200124, elapsed = 0.103 ms
+portable simd:   v = 0.200124, elapsed = 0.112 ms
+avg times: serial = 0.641 ms, simd = 0.057 ms, portable simd = 0.094 ms
+speedups:  simd = 11.32x, portable simd = 6.79x, simd/portable = 0.60x
+```
+
+
+With 16 lanes it's faster than my manually written avx512 version.
+
+```rust
+average_serial = 0.200820, average = 0.200052, average_portable = 0.100026
+diffs: serial-simd = 0.000769, serial-portable = 0.100795, simd-portable = 0.100026
+serial:          v = 0.200820, elapsed = 0.647 ms
+serial:          v = 0.200820, elapsed = 0.645 ms
+serial:          v = 0.200820, elapsed = 0.621 ms
+serial:          v = 0.200820, elapsed = 0.703 ms
+serial:          v = 0.200820, elapsed = 0.714 ms
+simd:            v = 0.200052, elapsed = 0.154 ms
+simd:            v = 0.200052, elapsed = 0.071 ms
+simd:            v = 0.200052, elapsed = 0.141 ms
+simd:            v = 0.200052, elapsed = 0.070 ms
+simd:            v = 0.200052, elapsed = 0.053 ms
+portable simd:   v = 0.100026, elapsed = 0.088 ms
+portable simd:   v = 0.100026, elapsed = 0.104 ms
+portable simd:   v = 0.100026, elapsed = 0.057 ms
+portable simd:   v = 0.100026, elapsed = 0.076 ms
+portable simd:   v = 0.100026, elapsed = 0.097 ms
+avg times: serial = 0.666 ms, simd = 0.098 ms, portable simd = 0.084 ms
+speedups:  simd = 6.81x, portable simd = 7.90x, simd/portable = 1.16x
+```
 
