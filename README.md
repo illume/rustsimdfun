@@ -366,6 +366,68 @@ Using std::thread to spawn threads in the function average_float_portable_simd_s
 
 This is built into the standard library, and is one way of doing it. This creates and destroys threads each time the function is called. It divides the data up into approximately equal amounts per thread.
 
+
+```rust
+/// Compute the average of a slice of f32s using portable SIMD and multiple threads.
+/// This uses std::thread::scope to spawn threads and join them safely.
+/// Each thread computes a partial sum using SIMD, and then the main thread combines them.
+pub fn average_float_portable_simd_std_thread(data: &[f32]) -> f32 {
+    use std::simd::Simd;
+    use std::simd::prelude::SimdFloat;
+    let len = data.len();
+    if len == 0 {
+        return 0.0;
+    }
+
+    // How many threads to spawn
+    let cpus = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1);
+
+    // SIMD type: 16 lanes of f32
+    type Vf32 = Simd<f32, 16>;
+    const LANES: usize = 16;
+
+    // Divide data into roughly equal chunks
+    let chunk_size = (len + cpus - 1) / cpus;
+
+    // Accumulate partial sums across threads
+    let mut total_sum = 0.0f32;
+    std::thread::scope(|s| {
+        let mut handles = Vec::with_capacity(cpus);
+
+        for chunk in data.chunks(chunk_size) {
+            handles.push(s.spawn(move || {
+                // SIMD-accelerated sum
+                let mut sum_simd = Vf32::splat(0.0);
+                let blocks = chunk.len() / LANES;
+                for i in 0..blocks {
+                    let base = i * LANES;
+                    let v = Vf32::from_slice(&chunk[base..base + LANES]);
+                    sum_simd += v;
+                }
+
+                // Horizontal reduction + scalar remainder
+                let mut partial = sum_simd.reduce_sum();
+                for &x in &chunk[blocks * LANES..] {
+                    partial += x;
+                }
+
+                partial
+            }));
+        }
+
+        // Join threads and combine
+        for handle in handles {
+            total_sum += handle.join().unwrap();
+        }
+    });
+
+    total_sum / (len as f32)
+}
+```
+
+
 In addition, the [available_parallelism](https://doc.rust-lang.org/beta/std/thread/fn.available_parallelism.html) 
 function has many limitations.
 
