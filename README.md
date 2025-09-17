@@ -270,7 +270,7 @@ speedups:  simd = 4.18x, portable simd = 9.39x, simd/portable = 2.25x
 This shows one of the benefits of being able to change lanes so easily.
 Instead of rewriting the intrinsics, I changed an 8 to 16 and recompiled.
 
-#### Surface book 3, Portable SIMD 7.9x faster than serial, 1.16x faster than manual avx version
+#### Surface book 3, Portable SIMD 7.9x to 17x faster than serial, 1.16x to 1.25x faster than manual avx version
 
 ```rust
 average_serial = 0.200820, average = 0.200052, average_portable = 0.200124
@@ -319,3 +319,34 @@ avg times: serial = 0.666 ms, simd = 0.098 ms, portable simd = 0.084 ms
 speedups:  simd = 6.81x, portable simd = 7.90x, simd/portable = 1.16x
 ```
 
+
+This laptop is quite variable. Here we see the portable SIMD version is 17x faster than serial.
+
+
+```rust
+average_serial = 0.200820, average = 0.200052, average_portable = 0.100026
+diffs: serial-simd = 0.000769, serial-portable = 0.100795, simd-portable = 0.100026
+serial:          v = 0.200820, elapsed = 0.701 ms
+serial:          v = 0.200820, elapsed = 0.608 ms
+serial:          v = 0.200820, elapsed = 0.840 ms
+serial:          v = 0.200820, elapsed = 0.652 ms
+serial:          v = 0.200820, elapsed = 0.683 ms
+simd:            v = 0.200052, elapsed = 0.103 ms
+simd:            v = 0.200052, elapsed = 0.039 ms
+simd:            v = 0.200052, elapsed = 0.038 ms
+simd:            v = 0.200052, elapsed = 0.038 ms
+simd:            v = 0.200052, elapsed = 0.038 ms
+portable simd:   v = 0.100026, elapsed = 0.038 ms
+portable simd:   v = 0.100026, elapsed = 0.049 ms
+portable simd:   v = 0.100026, elapsed = 0.039 ms
+portable simd:   v = 0.100026, elapsed = 0.038 ms
+portable simd:   v = 0.100026, elapsed = 0.041 ms
+avg times: serial = 0.697 ms, simd = 0.051 ms, portable simd = 0.041 ms
+speedups:  simd = 13.61x, portable simd = 17.01x, simd/portable = 1.25x
+```
+
+The results are much more stable on the Macbook Air M4.
+
+But still, the portable SIMD is a win. I didn't spend any time at all
+optimizing the manual avx512 version, but it's a really good result to me that the portable SIMD
+is both much nicer to read and faster.
