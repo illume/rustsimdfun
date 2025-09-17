@@ -1,3 +1,5 @@
+#![feature(portable_simd)]
+
 // average_float.rs
 // Compute the average of a large array of f32 using SIMD if available.
 // Supports AVX-512 on x86_64 and NEON on aarch64.
@@ -19,6 +21,7 @@ pub fn average(data: &[f32]) -> f32 {
     {
         return unsafe { average_neon(data) };
         // return unsafe { average_dynasm_neon(data) };
+        // return average_float_portable_simd(data);
     }
 
     #[allow(unreachable_code)]
@@ -113,6 +116,39 @@ unsafe fn average_neon(data: &[f32]) -> f32 {
 //     sum / (data.len() as f32)
 // }
 
+/// Compute the average of a slice of f32s using portable SIMD (8 lanes).
+pub fn average_float_portable_simd(data: &[f32]) -> f32 {
+    use std::simd::Simd;
+    use std::simd::prelude::SimdFloat;
+    // 8 lanes of f32 in one SIMD vector
+    type Vf32 = Simd<f32, 8>;
+    const LANES: usize = 8;
+
+    let len = data.len();
+    if len == 0 {
+        return 0.0;
+    }
+
+    // Accumulate in SIMD
+    let mut sum = Vf32::splat(0.0);
+    let chunks = len / LANES;
+    for i in 0..chunks {
+        let start = i * LANES;
+        let v = Vf32::from_slice(&data[start..start + LANES]);
+        sum += v;
+    }
+
+    // Horizontal reduction
+    let mut total = sum.reduce_sum();
+
+    // Handle remainder
+    for &x in &data[chunks * LANES..] {
+        total += x;
+    }
+
+    total / (len as f32)
+}
+
 fn init_data(len: usize) -> Vec<f32> {
     vec![0.2_f32; len]
 }
@@ -124,11 +160,16 @@ fn main() {
     // correctness
     let s_serial = average_serial(&data);
     let s_simd = average(&data);
+    let s_portable = average_float_portable_simd(&data);
     println!(
-        "average_serial = {:.6}, average = {:.6}, diff = {:.6}",
-        s_serial,
-        s_simd,
-        (s_serial - s_simd).abs()
+        "average_serial = {:.6}, average = {:.6}, average_portable = {:.6}",
+        s_serial, s_simd, s_portable
+    );
+    println!(
+        "diffs: serial-simd = {:.6}, serial-portable = {:.6}, simd-portable = {:.6}",
+        (s_serial - s_simd).abs(),
+        (s_serial - s_portable).abs(),
+        (s_simd - s_portable).abs()
     );
 
     // benchmark
@@ -146,7 +187,7 @@ fn main() {
         let v = average_serial(&data);
         let dur = start.elapsed();
         let ms = dur.as_secs_f64() * 1e3;
-        println!("serial: v = {:.6}, elapsed = {:.3} ms", v, ms);
+        println!("serial:          v = {:.6}, elapsed = {:.3} ms", v, ms);
         serial_total_ms += ms;
     }
 
@@ -157,19 +198,47 @@ fn main() {
         let v = average(&data);
         let dur = start.elapsed();
         let ms = dur.as_secs_f64() * 1e3;
-        println!("simd  : v = {:.6}, elapsed = {:.3} ms", v, ms);
+        println!("simd:            v = {:.6}, elapsed = {:.3} ms", v, ms);
         simd_total_ms += ms;
+    }
+
+    // Also bench portable simd
+    let mut portable_simd_total_ms = 0.0;
+    for _ in 0..RUNS {
+        let start = Instant::now();
+        let v = average_float_portable_simd(&data);
+        let dur = start.elapsed();
+        let ms = dur.as_secs_f64() * 1e3;
+        println!("portable simd:   v = {:.6}, elapsed = {:.3} ms", v, ms);
+        portable_simd_total_ms += ms;
     }
 
     let serial_avg = serial_total_ms / RUNS as f64;
     let simd_avg = simd_total_ms / RUNS as f64;
-    let speedup = if simd_avg > 0.0 {
+    let portable_simd_avg = portable_simd_total_ms / RUNS as f64;
+
+    let speedup_simd = if simd_avg > 0.0 {
         serial_avg / simd_avg
     } else {
         0.0
     };
+    let speedup_portable = if portable_simd_avg > 0.0 {
+        serial_avg / portable_simd_avg
+    } else {
+        0.0
+    };
+    let simd_vs_portable = if portable_simd_avg > 0.0 {
+        simd_avg / portable_simd_avg
+    } else {
+        0.0
+    };
+
     println!(
-        "avg times: serial = {:.3} ms, simd = {:.3} ms, speedup = {:.2}x",
-        serial_avg, simd_avg, speedup
+        "avg times: serial = {:.3} ms, simd = {:.3} ms, portable simd = {:.3} ms",
+        serial_avg, simd_avg, portable_simd_avg
+    );
+    println!(
+        "speedups:  simd = {:.2}x, portable simd = {:.2}x, simd/portable = {:.2}x",
+        speedup_simd, speedup_portable, simd_vs_portable
     );
 }
