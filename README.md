@@ -354,3 +354,6 @@ The results are much more stable on the Macbook Air M4.
 But still, the portable SIMD is a win. I didn't spend any time at all
 optimizing the manual avx512 version, but it's a really good result to me that the portable SIMD
 is both much nicer to read and faster.
+
+Also the portable SIMD version does not have any "unsafe" parts in my code. Whereas using intrinsics
+directly there's quite a few unsafe calls.
