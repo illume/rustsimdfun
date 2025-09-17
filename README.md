@@ -507,3 +507,96 @@ Also that amount of data is different depending on the cache size.
 Additionally, threads can give a larger speedup on different machines.
 
 
+Surfbook 3 with with 2MB of data, 1/10th the speed:
+
+```rust
+average_serial = 0.200820, average = 0.200052, average_portable = 0.200052
+diffs: serial-simd = 0.000769, serial-portable = 0.000769, simd-portable = 0.000000
+serial:          v = 0.200820, elapsed = 0.635 ms
+serial:          v = 0.200820, elapsed = 0.647 ms
+serial:          v = 0.200820, elapsed = 0.604 ms
+serial:          v = 0.200820, elapsed = 0.654 ms
+serial:          v = 0.200820, elapsed = 0.679 ms
+simd:            v = 0.200052, elapsed = 0.097 ms
+simd:            v = 0.200052, elapsed = 0.061 ms
+simd:            v = 0.200052, elapsed = 0.055 ms
+simd:            v = 0.200052, elapsed = 0.050 ms
+simd:            v = 0.200052, elapsed = 0.041 ms
+portable simd:   v = 0.200052, elapsed = 0.071 ms
+portable simd:   v = 0.200052, elapsed = 0.080 ms
+portable simd:   v = 0.200052, elapsed = 0.079 ms
+portable simd:   v = 0.200052, elapsed = 0.076 ms
+portable simd:   v = 0.200052, elapsed = 0.078 ms
+portable simd std thread:   v = 0.200008, elapsed = 0.980 ms
+portable simd std thread:   v = 0.200008, elapsed = 0.880 ms
+portable simd std thread:   v = 0.200008, elapsed = 0.772 ms
+portable simd std thread:   v = 0.200008, elapsed = 0.680 ms
+portable simd std thread:   v = 0.200008, elapsed = 0.795 ms
+avg times: serial = 0.644 ms, simd = 0.061 ms, portable simd = 0.077 ms, portable simd (std thread) = 0.822 ms
+speedups:  simd = 10.59x, portable simd = 8.38x, portable simd (std thread) = 0.78x
+comparisons: simd/portable = 0.79x, simd/portable(std thread) = 0.07x
+simd portable (std thread) is 0.09x faster than simd portable (single-thread)
+```
+
+
+Surface Book 3 with 80MB worth of data, 2x faster:
+```rust
+average_serial = 0.200000, average = 0.202034, average_portable = 0.202034
+diffs: serial-simd = 0.002034, serial-portable = 0.002034, simd-portable = 0.000000
+serial:          v = 0.200000, elapsed = 26.867 ms
+serial:          v = 0.200000, elapsed = 28.629 ms
+serial:          v = 0.200000, elapsed = 28.977 ms
+serial:          v = 0.200000, elapsed = 27.416 ms
+serial:          v = 0.200000, elapsed = 27.629 ms
+simd:            v = 0.202034, elapsed = 4.579 ms
+simd:            v = 0.202034, elapsed = 6.094 ms
+simd:            v = 0.202034, elapsed = 5.088 ms
+simd:            v = 0.202034, elapsed = 5.024 ms
+simd:            v = 0.202034, elapsed = 5.942 ms
+portable simd:   v = 0.202034, elapsed = 5.934 ms
+portable simd:   v = 0.202034, elapsed = 5.967 ms
+portable simd:   v = 0.202034, elapsed = 6.958 ms
+portable simd:   v = 0.202034, elapsed = 5.714 ms
+portable simd:   v = 0.202034, elapsed = 6.152 ms
+portable simd std thread:   v = 0.199678, elapsed = 4.230 ms
+portable simd std thread:   v = 0.199678, elapsed = 3.086 ms
+portable simd std thread:   v = 0.199678, elapsed = 2.493 ms
+portable simd std thread:   v = 0.199678, elapsed = 2.795 ms
+portable simd std thread:   v = 0.199678, elapsed = 2.603 ms
+avg times: serial = 27.904 ms, simd = 5.345 ms, portable simd = 6.145 ms, portable simd (std thread) = 3.042 ms
+speedups:  simd = 5.22x, portable simd = 4.54x, portable simd (std thread) = 9.17x
+comparisons: simd/portable = 0.87x, simd/portable(std thread) = 1.76x
+simd portable (std thread) is 2.02x faster than simd portable (single-thread)
+```
+
+
+Surface Book 3 with 800MB worth of data, 2.7x faster:
+```rust
+
+average_serial = 0.020000, average = 0.225271, average_portable = 0.225271
+diffs: serial-simd = 0.205271, serial-portable = 0.205271, simd-portable = 0.000000
+serial:          v = 0.020000, elapsed = 269.023 ms
+serial:          v = 0.020000, elapsed = 264.383 ms
+serial:          v = 0.020000, elapsed = 270.985 ms
+serial:          v = 0.020000, elapsed = 267.840 ms
+serial:          v = 0.020000, elapsed = 272.952 ms
+simd:            v = 0.225271, elapsed = 54.020 ms
+simd:            v = 0.225271, elapsed = 52.710 ms
+simd:            v = 0.225271, elapsed = 56.589 ms
+simd:            v = 0.225271, elapsed = 52.944 ms
+simd:            v = 0.225271, elapsed = 53.350 ms
+portable simd:   v = 0.225271, elapsed = 55.643 ms
+portable simd:   v = 0.225271, elapsed = 58.079 ms
+portable simd:   v = 0.225271, elapsed = 59.521 ms
+portable simd:   v = 0.225271, elapsed = 56.351 ms
+portable simd:   v = 0.225271, elapsed = 56.018 ms
+portable simd std thread:   v = 0.199127, elapsed = 18.886 ms
+portable simd std thread:   v = 0.199127, elapsed = 19.354 ms
+portable simd std thread:   v = 0.199127, elapsed = 23.432 ms
+portable simd std thread:   v = 0.199127, elapsed = 20.996 ms
+portable simd std thread:   v = 0.199127, elapsed = 24.073 ms
+avg times: serial = 269.037 ms, simd = 53.923 ms, portable simd = 57.122 ms, portable simd (std thread) = 21.348 ms
+speedups:  simd = 4.99x, portable simd = 4.71x, portable simd (std thread) = 12.60x
+comparisons: simd/portable = 0.94x, simd/portable(std thread) = 2.53x
+simd portable (std thread) is 2.68x faster than simd portable (single-thread)
+```
