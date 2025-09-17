@@ -357,3 +357,153 @@ is both much nicer to read and faster.
 
 Also the portable SIMD version does not have any "unsafe" parts in my code. Whereas using intrinsics
 directly there's quite a few unsafe calls.
+
+
+
+### Using std::thread for parallelism
+
+Using std::thread to spawn threads in the function average_float_portable_simd_std_thread.
+
+This is built into the standard library, and is one way of doing it. This creates and destroys threads each time the function is called. It divides the data up into approximately equal amounts per thread.
+
+In addition, the [available_parallelism](https://doc.rust-lang.org/beta/std/thread/fn.available_parallelism.html) 
+function has many limitations.
+
+> The purpose of this API is to provide an easy and portable way to query the default amount of parallelism the program should use. Among other things it does not expose information on NUMA regions, does not account for differences in (co)processor capabilities or current system load, and will not modify the program’s global state in order to more accurately query the amount of available parallelism.
+> It may overcount the amount of parallelism available when running in a VM with CPU usage limits.
+
+The Apple Macbook Air M4
+- 2 memory channels
+-  L1 Cache:
+  ⁠-  192 KB per core (combined instruction + data)
+-  L2 Cache:
+  ⁠-  16 MB shared across all 10 cores
+
+Surface book 3
+-  L1 Cache:
+  -  32 KB instruction + 32 KB data per core
+-  L2 Cache:
+  -  256 KB per core
+-  L3 Cache:
+  -  8 MB shared across all 4 cores
+
+
+
+Before we were processing about 2MB of data. I think we had gotten pretty close to memory speed at this amount of data. With 2MB of data it's about one quarter of the speed when using std thread.
+
+```rust
+average_serial = 0.200820, average = 0.199793, average_portable = 0.200052
+diffs: serial-simd = 0.001028, serial-portable = 0.000769, simd-portable = 0.000259
+serial:          v = 0.200820, elapsed = 0.623 ms
+serial:          v = 0.200820, elapsed = 0.623 ms
+serial:          v = 0.200820, elapsed = 0.628 ms
+serial:          v = 0.200820, elapsed = 0.583 ms
+serial:          v = 0.200820, elapsed = 0.538 ms
+simd:            v = 0.199793, elapsed = 0.158 ms
+simd:            v = 0.199793, elapsed = 0.158 ms
+simd:            v = 0.199793, elapsed = 0.158 ms
+simd:            v = 0.199793, elapsed = 0.158 ms
+simd:            v = 0.199793, elapsed = 0.158 ms
+portable simd:   v = 0.200052, elapsed = 0.045 ms
+portable simd:   v = 0.200052, elapsed = 0.045 ms
+portable simd:   v = 0.200052, elapsed = 0.045 ms
+portable simd:   v = 0.200052, elapsed = 0.045 ms
+portable simd:   v = 0.200052, elapsed = 0.045 ms
+portable simd std thread:   v = 0.200007, elapsed = 0.204 ms
+portable simd std thread:   v = 0.200007, elapsed = 0.180 ms
+portable simd std thread:   v = 0.200007, elapsed = 0.174 ms
+portable simd std thread:   v = 0.200007, elapsed = 0.140 ms
+portable simd std thread:   v = 0.200007, elapsed = 0.144 ms
+avg times: serial = 0.599 ms, simd = 0.158 ms, portable simd = 0.045 ms, portable simd (std thread) = 0.168 ms
+speedups:  simd = 3.80x, portable simd = 13.41x, portable simd (std thread) = 3.56x
+comparisons: simd/portable = 3.53x, simd/portable(std thread) = 0.94x
+portable (std thread) is 0.27x faster than portable (single-thread)
+```
+
+So I increased to to 80MB which is more than the laptops I have have cache.
+
+The std thread one then goes about 1.3x faster (fluctating a lot between 1.15x faster and 1.3x faster).
+
+```rust
+average_serial = 0.200000, average = 0.191133, average_portable = 0.202034
+diffs: serial-simd = 0.008867, serial-portable = 0.002034, simd-portable = 0.010900
+serial:          v = 0.200000, elapsed = 13.787 ms
+serial:          v = 0.200000, elapsed = 12.363 ms
+serial:          v = 0.200000, elapsed = 11.685 ms
+serial:          v = 0.200000, elapsed = 11.028 ms
+serial:          v = 0.200000, elapsed = 10.423 ms
+simd:            v = 0.191133, elapsed = 3.043 ms
+simd:            v = 0.191133, elapsed = 3.115 ms
+simd:            v = 0.191133, elapsed = 2.961 ms
+simd:            v = 0.191133, elapsed = 3.236 ms
+simd:            v = 0.191133, elapsed = 2.962 ms
+portable simd:   v = 0.202034, elapsed = 2.245 ms
+portable simd:   v = 0.202034, elapsed = 1.608 ms
+portable simd:   v = 0.202034, elapsed = 1.497 ms
+portable simd:   v = 0.202034, elapsed = 1.270 ms
+portable simd:   v = 0.202034, elapsed = 1.314 ms
+portable simd std thread:   v = 0.199793, elapsed = 1.379 ms
+portable simd std thread:   v = 0.199793, elapsed = 1.357 ms
+portable simd std thread:   v = 0.199793, elapsed = 1.204 ms
+portable simd std thread:   v = 0.199793, elapsed = 1.098 ms
+portable simd std thread:   v = 0.199793, elapsed = 1.070 ms
+avg times: serial = 11.857 ms, simd = 3.063 ms, portable simd = 1.587 ms, portable simd (std thread) = 1.222 ms
+speedups:  simd = 3.87x, portable simd = 7.47x, portable simd (std thread) = 9.71x
+comparisons: simd/portable = 1.93x, simd/portable(std thread) = 2.51x
+simd portable (std thread) is 1.30x faster than simd portable (single-thread)
+```
+
+Still the total run time is only 1ms. So a good portion of that is probably thread creation/destruction overhead.
+
+I moved it up to 800MB of data and then simd portable (std thread) consistently 1.59x times faster 
+than single thread simd portable.
+
+```rust
+average_serial = 0.020000, average = 0.080000, average_portable = 0.225271
+diffs: serial-simd = 0.060000, serial-portable = 0.205271, simd-portable = 0.145271
+serial:          v = 0.020000, elapsed = 102.107 ms
+serial:          v = 0.020000, elapsed = 102.166 ms
+serial:          v = 0.020000, elapsed = 102.258 ms
+serial:          v = 0.020000, elapsed = 102.117 ms
+serial:          v = 0.020000, elapsed = 102.306 ms
+simd:            v = 0.080000, elapsed = 30.243 ms
+simd:            v = 0.080000, elapsed = 30.245 ms
+simd:            v = 0.080000, elapsed = 31.089 ms
+simd:            v = 0.080000, elapsed = 32.326 ms
+simd:            v = 0.080000, elapsed = 30.264 ms
+portable simd:   v = 0.225271, elapsed = 12.022 ms
+portable simd:   v = 0.225271, elapsed = 12.358 ms
+portable simd:   v = 0.225271, elapsed = 12.321 ms
+portable simd:   v = 0.225271, elapsed = 12.331 ms
+portable simd:   v = 0.225271, elapsed = 14.862 ms
+portable simd std thread:   v = 0.202034, elapsed = 8.224 ms
+portable simd std thread:   v = 0.202034, elapsed = 7.835 ms
+portable simd std thread:   v = 0.202034, elapsed = 7.955 ms
+portable simd std thread:   v = 0.202034, elapsed = 7.921 ms
+portable simd std thread:   v = 0.202034, elapsed = 8.213 ms
+avg times: serial = 102.191 ms, simd = 30.833 ms, portable simd = 12.779 ms, portable simd (std thread) = 8.030 ms
+speedups:  simd = 3.31x, portable simd = 8.00x, portable simd (std thread) = 12.73x
+comparisons: simd/portable = 2.41x, simd/portable(std thread) = 3.84x
+simd portable (std thread) is 1.59x faster than simd portable (single-thread)
+```
+
+A single thread should only be able to use one memory channel, so even the fastest code
+should not be able to be memory bottlenecked on one core.
+
+I tried from 2 to 16 threads (on this 10 core Apple Macbook Air m4), and 10 threads was fastest.
+Only using 6 cores was very close to the fastest speed. This shows one of the limitations of using
+the total number of cores on the system. For a lot of code it's better to use less cores.
+
+#### 12.5x faster than serial code run on a single core
+
+For the Surface Book 3:
+- at 2MB of data it is 1/10th the speed of a single thread.
+- at 80MB of data it is 1.75x faster than single thread
+- at 800MB of data it is 2.6x faster than single thread
+
+This shows that depending on the data size the code should select a different number of threads.
+Also that amount of data is different depending on the cache size.
+
+Additionally, threads can give a larger speedup on different machines.
+
+
