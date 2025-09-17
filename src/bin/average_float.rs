@@ -122,7 +122,7 @@ pub fn average_float_portable_simd(data: &[f32]) -> f32 {
     use std::simd::prelude::SimdFloat;
     // 8 lanes of f32 in one SIMD vector
     type Vf32 = Simd<f32, 8>;
-    const LANES: usize = 8;
+    const LANES: usize = 16;
 
     let len = data.len();
     if len == 0 {

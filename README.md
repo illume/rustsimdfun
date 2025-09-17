@@ -214,7 +214,7 @@ pub fn average_float_portable_simd(data: &[f32]) -> f32 {
 }
 ```
 
-#### Portable SIMD 8x faster than serial, 4x faster than manual version
+#### Portable SIMD 9.4x faster than serial, 2.25x faster than manual version
 
 So How fast is in on Macbook air M4?
 
@@ -241,4 +241,32 @@ speedups:  simd = 4.10x, portable simd = 7.89x, simd/portable = 1.92x
 ```
 
 Why is it faster? I didn't look into it, but I guess it's using more lanes.
+
+
+I tried changing the lanes from 8 to 16, and on the mac m4 it goes a bit quicker.
+
+```rust
+average_serial = 0.200820, average = 0.199793, average_portable = 0.100026
+diffs: serial-simd = 0.001028, serial-portable = 0.100795, simd-portable = 0.099767
+serial:          v = 0.200820, elapsed = 0.577 ms
+serial:          v = 0.200820, elapsed = 0.582 ms
+serial:          v = 0.200820, elapsed = 0.576 ms
+serial:          v = 0.200820, elapsed = 0.582 ms
+serial:          v = 0.200820, elapsed = 0.589 ms
+simd:            v = 0.199793, elapsed = 0.157 ms
+simd:            v = 0.199793, elapsed = 0.134 ms
+simd:            v = 0.199793, elapsed = 0.139 ms
+simd:            v = 0.199793, elapsed = 0.135 ms
+simd:            v = 0.199793, elapsed = 0.131 ms
+portable simd:   v = 0.100026, elapsed = 0.064 ms
+portable simd:   v = 0.100026, elapsed = 0.062 ms
+portable simd:   v = 0.100026, elapsed = 0.062 ms
+portable simd:   v = 0.100026, elapsed = 0.062 ms
+portable simd:   v = 0.100026, elapsed = 0.061 ms
+avg times: serial = 0.581 ms, simd = 0.139 ms, portable simd = 0.062 ms
+speedups:  simd = 4.18x, portable simd = 9.39x, simd/portable = 2.25x
+```
+
+This shows one of the benefits of being able to change lanes so easily.
+Instead of rewriting the intrinsics, I changed an 8 to 16 and recompiled.
 
