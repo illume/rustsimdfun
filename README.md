@@ -149,9 +149,96 @@ pub extern "win64" fn print(buffer: *const u8, length: u64) -> bool {
 
 
 
-I tried... but couldn't get it to work.
+I tried... but couldn't get it to work. Perhaps because my neon experience isn't very good,
+but I kept getting errors and eventually gave up.
 
 
+## Wednesday, 17th Sept 2025
+
+I tried a bit with dynasmrt some more, but no luck making a neon version of the function
+for average_float. Still, was quite interesting.
+
+Had a bunch of chats with Magnus about SIMD. One was about how to combine multiple requests 
+for the same function. If each request does various small amounts of work, maybe SIMD doesn't
+make sense so much. But if you rewrite the function to handle 100s of request at once then
+you can batch the work and SIMD functions may be useful in this case. For example, 
+decoding 1000 small base64 strings at once, doing 1 DB select rather than 1000. 
 
 
+### Portable SIMD average_float_portable_simd
+
+Portable simd is a future standard allowing you to write portable SIMD code
+that works on different architectures.
+
+It's still only in nightly.
+
+```shell
+rustup update -- nightly
+rustup override set nightly
+```
+
+Here's the portable simd version.
+
+```rust
+/// Compute the average of a slice of f32s using portable SIMD (8 lanes).
+pub fn average_float_portable_simd(data: &[f32]) -> f32 {
+    use std::simd::Simd;
+    use std::simd::prelude::SimdFloat;
+    // 8 lanes of f32 in one SIMD vector
+    type Vf32 = Simd<f32, 8>;
+    const LANES: usize = 8;
+
+    let len = data.len();
+    if len == 0 {
+        return 0.0;
+    }
+
+    // Accumulate in SIMD
+    let mut sum = Vf32::splat(0.0);
+    let chunks = len / LANES;
+    for i in 0..chunks {
+        let start = i * LANES;
+        let v = Vf32::from_slice(&data[start..start + LANES]);
+        sum += v;
+    }
+
+    // Horizontal reduction
+    let mut total = sum.reduce_sum();
+
+    // Handle remainder
+    for &x in &data[chunks * LANES..] {
+        total += x;
+    }
+
+    total / (len as f32)
+}
+```
+
+#### Portable SIMD 8x faster than serial, 4x faster than manual version
+
+So How fast is in on Macbook air M4?
+
+``` rust
+average_serial = 0.200820, average = 0.199793, average_portable = 0.200124
+diffs: serial-simd = 0.001028, serial-portable = 0.000697, simd-portable = 0.000331
+serial:          v = 0.200820, elapsed = 0.594 ms
+serial:          v = 0.200820, elapsed = 0.591 ms
+serial:          v = 0.200820, elapsed = 0.580 ms
+serial:          v = 0.200820, elapsed = 0.581 ms
+serial:          v = 0.200820, elapsed = 0.585 ms
+simd:            v = 0.199793, elapsed = 0.140 ms
+simd:            v = 0.199793, elapsed = 0.154 ms
+simd:            v = 0.199793, elapsed = 0.139 ms
+simd:            v = 0.199793, elapsed = 0.135 ms
+simd:            v = 0.199793, elapsed = 0.146 ms
+portable simd:   v = 0.200124, elapsed = 0.074 ms
+portable simd:   v = 0.200124, elapsed = 0.075 ms
+portable simd:   v = 0.200124, elapsed = 0.074 ms
+portable simd:   v = 0.200124, elapsed = 0.074 ms
+portable simd:   v = 0.200124, elapsed = 0.075 ms
+avg times: serial = 0.586 ms, simd = 0.143 ms, portable simd = 0.074 ms
+speedups:  simd = 4.10x, portable simd = 7.89x, simd/portable = 1.92x
+```
+
+Why is it faster? I didn't look into it, but I guess it's using more lanes.
 
