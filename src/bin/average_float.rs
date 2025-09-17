@@ -18,7 +18,9 @@ pub fn average(data: &[f32]) -> f32 {
     #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
     {
         return unsafe { average_neon(data) };
+        // return unsafe { average_dynasm_neon(data) };
     }
+
     #[allow(unreachable_code)]
     average_serial(data)
 }
@@ -59,6 +61,57 @@ unsafe fn average_neon(data: &[f32]) -> f32 {
     }
     sum / (data.len() as f32)
 }
+
+// Alternative NEON implementation using dynasm for JIT assembly generation.
+// I couldn't get this to work yet.
+// https://censoredusername.github.io/dynasm-rs/language/tutorial.html
+// See aarch64 reference https://censoredusername.github.io/dynasm-rs/language/langref_aarch64.html
+// See aarch64 instruction set https://censoredusername.github.io/dynasm-rs/language/instructionref_aarch64.html
+// See test examples for code https://github.com/CensoredUsername/dynasm-rs/blob/master/testing/tests/gen_aarch64/aarch64_tests_1.rs.gen
+//
+// #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+// #[target_feature(enable = "neon")]
+// unsafe fn average_dynasm_neon(data: &[f32]) -> f32 {
+//     use dynasmrt::{dynasm, DynasmApi, ExecutableBuffer};
+//     use std::mem;
+
+//     let ptr = data.as_ptr();
+//     let chunks = data.len() / 4;
+//     let mut out = [0f32; 4]; // will receive v0 lanes from JIT
+
+//     let mut ops = dynasmrt::aarch64::Assembler::new().unwrap();
+//     let entry_point = ops.offset();
+//     dynasm!(ops
+//         ; .arch aarch64
+//         // ; // x0 = data ptr, x1 = chunks, x2 = out ptr
+//         ; cbz x1, =>loop_end
+//         // ; // zero v0
+//         ; dup V0.S4, wzr
+//         ;->loop_start:
+//         ; ld1 {v1.4s}, [x0], 16
+//         ; fadd v0.4s, v0.4s, v1.4s
+//         ; subs x1, x1, 1
+//         ; bne =>loop_start
+//         ;->loop_end:
+//         ; st1 {v0.4s}, [x2]
+//         ; ret
+//     );
+//     let buf: ExecutableBuffer = ops.finalize().unwrap();
+//     let func: extern "C" fn(*const f32, usize, *mut f32) =
+//         mem::transmute(buf.ptr(entry_point));
+
+//     func(ptr, chunks, out.as_mut_ptr());
+
+//     // reduce the 4-lane accumulator stored by the JIT
+//     let mut sum: f32 = out.iter().copied().sum();
+
+//     // handle remaining tail scalars safely
+//     for i in (chunks * 4)..data.len() {
+//         sum += *ptr.add(i);
+//     }
+
+//     sum / (data.len() as f32)
+// }
 
 fn init_data(len: usize) -> Vec<f32> {
     vec![0.2_f32; len]

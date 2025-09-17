@@ -88,4 +88,70 @@ simd  : v = 0.200052, elapsed = 0.044 ms
 avg times: serial = 0.703 ms, simd = 0.066 ms, speedup = 10.65x
 ```
 
+## Tuesday, 16th Sept 2025
+
+I read up on wide, and pulp today. Super interesting! I keep uncovering more SIMD in Rust stuff I haven't encountered yet.
+
+Another improvement on Rust SIMD in the last several months is that AVX-512 support is in stable Rust now. With this I'm seeing faster results on an old 2019 intel CPU than an m4 chip (which is in general lots faster).
+
+I was reading through the portable-simd repo and [I also learnt something new](https://github.com/rust-lang/portable-simd/pull/420/files) about how Glibc can load instruction specific libraries itself now!
+> * Newer distros (with Glibc 2.33 or later) support `glibc-hwcaps` directory that allow you to place optimized libraries. Instead of putting the libraries in the normal locations, you can create `glibc-hwcaps` directory at those locations, and it can have subdirectories such as `x86-64-v2` (supports up to `sse4.2`), `x86-64-v3` (supports up to `avx2`), and `x86-64-v4` (supports `avx512f`, `avx512bw`, `avx512cd`, `avx512dq`, and `avx512vl`) where you can place the libraries built with those target CPUs. When loading a library, Glibc will automatically load the most optimized library supported by the CPU.
+
+### dynasmrt
+
+This is a runtime assembler, similar to the one used by Luajit (or Softwire as was or is used in Chrome for graphics compilation).
+
+https://censoredusername.github.io/dynasm-rs/language/tutorial.html
+
+
+```rust
+use dynasmrt::{dynasm, DynasmApi, DynasmLabelApi};
+
+use std::{io, slice, mem};
+use std::io::Write;
+
+fn main() {
+    let mut ops = dynasmrt::x64::Assembler::new().unwrap();
+    let string = "Hello World!";
+
+    dynasm!(ops
+        ; .arch x64
+        ; ->hello:
+        ; .bytes string.as_bytes()
+    );
+
+    let hello = ops.offset();
+    dynasm!(ops
+        ; .arch x64
+        ; lea rcx, [->hello]
+        ; xor edx, edx
+        ; mov dl, BYTE string.len() as _
+        ; mov rax, QWORD print as _
+        ; sub rsp, BYTE 0x28
+        ; call rax
+        ; add rsp, BYTE 0x28
+        ; ret
+    );
+
+    let buf = ops.finalize().unwrap();
+
+    let hello_fn: extern "win64" fn() -> bool = unsafe { mem::transmute(buf.ptr(hello)) };
+
+    assert!(hello_fn());
+}
+
+pub extern "win64" fn print(buffer: *const u8, length: u64) -> bool {
+    io::stdout()
+        .write_all(unsafe { slice::from_raw_parts(buffer, length as usize) })
+        .is_ok()
+}
+```
+
+
+
+I tried... but couldn't get it to work.
+
+
+
+
 
