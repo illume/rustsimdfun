@@ -207,6 +207,45 @@ pub fn average_float_portable_simd_std_thread(data: &[f32]) -> f32 {
     total_sum / (len as f32)
 }
 
+/// Compute the average of a slice of f32s using portable SIMD (8 lanes).
+pub fn average_float_portable_simd_rayon(data: &[f32]) -> f32 {
+    use rayon::prelude::*;
+    use std::simd::Simd;
+    use std::simd::prelude::SimdFloat;
+    // 16 lanes of f32 in one SIMD vector
+    type Vf32 = Simd<f32, 16>;
+    const LANES: usize = 16;
+
+    let len = data.len();
+    if len == 0 {
+        return 0.0;
+    }
+
+    // Use rayon to parallelize the computation
+    let total_sum: f32 = data
+        .par_chunks(1024 * LANES) // process in chunks of 1024 vectors
+        .map(|chunk| {
+            // Each thread computes its own SIMD sum
+            let mut sum = Vf32::splat(0.0);
+            let chunks = chunk.len() / LANES;
+            for i in 0..chunks {
+                let start = i * LANES;
+                let v = Vf32::from_slice(&chunk[start..start + LANES]);
+                sum += v;
+            }
+            // Horizontal reduction
+            let mut partial = sum.reduce_sum();
+            // Handle remainder
+            for &x in &chunk[chunks * LANES..] {
+                partial += x;
+            }
+            partial
+        })
+        .sum();
+
+    total_sum / (len as f32)
+}
+
 fn init_data(len: usize) -> Vec<f32> {
     vec![0.2_f32; len]
 }
@@ -222,15 +261,19 @@ fn main() {
     let s_serial = average_serial(&data);
     let s_simd = average(&data);
     let s_portable = average_float_portable_simd(&data);
+    let s_rayon = average_float_portable_simd_rayon(&data);
     println!(
-        "average_serial = {:.6}, average = {:.6}, average_portable = {:.6}",
-        s_serial, s_simd, s_portable
+        "average_serial = {:.6}, average = {:.6}, average_portable = {:.6}, average_portable_rayon = {:.6}",
+        s_serial, s_simd, s_portable, s_rayon
     );
     println!(
-        "diffs: serial-simd = {:.6}, serial-portable = {:.6}, simd-portable = {:.6}",
+        "diffs: serial-simd = {:.6}, serial-portable = {:.6}, simd-portable = {:.6}, serial-rayon = {:.6}, portable-rayon = {:.6}, simd-rayon = {:.6}",
         (s_serial - s_simd).abs(),
         (s_serial - s_portable).abs(),
-        (s_simd - s_portable).abs()
+        (s_simd - s_portable).abs(),
+        (s_serial - s_rayon).abs(),
+        (s_portable - s_rayon).abs(),
+        (s_simd - s_rayon).abs(),
     );
 
     // benchmark
@@ -287,10 +330,26 @@ fn main() {
         );
         portable_simd_std_thread_total_ms += ms;
     }
+
+    // bench rayon portable simd
+    let mut rayon_total_ms = 0.0;
+    for _ in 0..RUNS {
+        let start = Instant::now();
+        let v = average_float_portable_simd_rayon(&data);
+        let dur = start.elapsed();
+        let ms = dur.as_secs_f64() * 1e3;
+        println!(
+            "portable simd rayon:        v = {:.6}, elapsed = {:.3} ms",
+            v, ms
+        );
+        rayon_total_ms += ms;
+    }
+
     let serial_avg = serial_total_ms / RUNS as f64;
     let simd_avg = simd_total_ms / RUNS as f64;
     let portable_simd_avg = portable_simd_total_ms / RUNS as f64;
     let portable_simd_std_thread_avg = portable_simd_std_thread_total_ms / RUNS as f64;
+    let rayon_avg = rayon_total_ms / RUNS as f64;
 
     let speedup_simd = if simd_avg > 0.0 {
         serial_avg / simd_avg
@@ -307,6 +366,11 @@ fn main() {
     } else {
         0.0
     };
+    let speedup_rayon = if rayon_avg > 0.0 {
+        serial_avg / rayon_avg
+    } else {
+        0.0
+    };
 
     let simd_vs_portable = if portable_simd_avg > 0.0 {
         simd_avg / portable_simd_avg
@@ -318,18 +382,28 @@ fn main() {
     } else {
         0.0
     };
+    let simd_vs_rayon = if rayon_avg > 0.0 {
+        simd_avg / rayon_avg
+    } else {
+        0.0
+    };
+    let portable_vs_rayon = if rayon_avg > 0.0 {
+        portable_simd_avg / rayon_avg
+    } else {
+        0.0
+    };
 
     println!(
-        "avg times: serial = {:.3} ms, simd = {:.3} ms, portable simd = {:.3} ms, portable simd (std thread) = {:.3} ms",
-        serial_avg, simd_avg, portable_simd_avg, portable_simd_std_thread_avg
+        "avg times: serial = {:.3} ms, simd = {:.3} ms, portable simd = {:.3} ms, portable simd (std thread) = {:.3} ms, portable simd (rayon) = {:.3} ms",
+        serial_avg, simd_avg, portable_simd_avg, portable_simd_std_thread_avg, rayon_avg
     );
     println!(
-        "speedups:  simd = {:.2}x, portable simd = {:.2}x, portable simd (std thread) = {:.2}x",
-        speedup_simd, speedup_portable, speedup_portable_std_thread
+        "speedups:  simd = {:.2}x, portable simd = {:.2}x, portable simd (std thread) = {:.2}x, portable simd (rayon) = {:.2}x",
+        speedup_simd, speedup_portable, speedup_portable_std_thread, speedup_rayon
     );
     println!(
-        "comparisons: simd/portable = {:.2}x, simd/portable(std thread) = {:.2}x",
-        simd_vs_portable, simd_vs_portable_std_thread
+        "comparisons: simd/portable = {:.2}x, simd/portable(std thread) = {:.2}x, simd/rayon = {:.2}x, portable/rayon = {:.2}x",
+        simd_vs_portable, simd_vs_portable_std_thread, simd_vs_rayon, portable_vs_rayon
     );
 
     let portable_std_vs_portable = if portable_simd_std_thread_avg > 0.0 {
@@ -340,5 +414,9 @@ fn main() {
     println!(
         "simd portable (std thread) is {:.2}x faster than simd portable (single-thread)",
         portable_std_vs_portable
+    );
+    println!(
+        "simd portable (rayon) is {:.2}x faster than simd portable (single-thread)",
+        portable_simd_avg / rayon_avg
     );
 }

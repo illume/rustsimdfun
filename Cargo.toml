@@ -14,5 +14,6 @@ rustflags = [
 ]
 
 [dependencies]
+rayon = "1.11.0"
 #dynasmrt = "4.0.1"
 
