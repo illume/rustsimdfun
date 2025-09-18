@@ -317,6 +317,9 @@ fn main() {
         portable_simd_total_ms += ms;
     }
 
+    // warmup, note, this starts threads every time function is run.
+    let vv = average_float_portable_simd_std_thread(&data);
+
     // also bench average_float_portable_simd_std_thread
     let mut portable_simd_std_thread_total_ms = 0.0;
     for _ in 0..RUNS {
@@ -330,6 +333,9 @@ fn main() {
         );
         portable_simd_std_thread_total_ms += ms;
     }
+
+    // warmup, this also starts rayon threads
+    let vv = average_float_portable_simd_rayon(&data);
 
     // bench rayon portable simd
     let mut rayon_total_ms = 0.0;
