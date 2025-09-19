@@ -1,6 +1,15 @@
 # rustsimdfun
 
-Some rust SIMD learning.
+
+
+
+Some rust SIMD learning fun.
+
+
+blog: https://github.com/illume/rustsimdfun
+
+
+
 
 
 ## Monday, 15th Sept 2025
@@ -87,6 +96,48 @@ simd  : v = 0.200052, elapsed = 0.064 ms
 simd  : v = 0.200052, elapsed = 0.044 ms
 avg times: serial = 0.703 ms, simd = 0.066 ms, speedup = 10.65x
 ```
+
+
+
+```rust
+#[cfg(all(feature = "avx512", target_arch = "x86_64"))]
+#[target_feature(enable = "avx512f")]
+unsafe fn average_avx512(data: &[f32]) -> f32 {
+    use std::arch::x86_64::*;
+    let ptr = data.as_ptr();
+    let chunks = data.len() / 16;
+    let mut acc = _mm512_setzero_ps();
+
+    for i in 0..chunks {
+        let v = _mm512_loadu_ps(ptr.add(i * 16));
+        acc = _mm512_add_ps(acc, v);
+    }
+    let mut sum = _mm512_reduce_add_ps(acc);
+    for i in (chunks * 16)..data.len() {
+        sum += unsafe { *ptr.add(i) };
+    }
+    sum / (data.len() as f32)
+}
+
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+#[target_feature(enable = "neon")]
+unsafe fn average_neon(data: &[f32]) -> f32 {
+    use std::arch::aarch64::*;
+    let ptr = data.as_ptr();
+    let chunks = data.len() / 4;
+    let mut acc = vdupq_n_f32(0.0);
+    for i in 0..chunks {
+        let v = unsafe { vld1q_f32(ptr.add(i * 4)) };
+        acc = vaddq_f32(acc, v);
+    }
+    let mut sum = vaddvq_f32(acc);
+    for i in (chunks * 4)..data.len() {
+        sum += unsafe { *ptr.add(i) };
+    }
+    sum / (data.len() as f32)
+}
+```
+
 
 ## Tuesday, 16th Sept 2025
 
@@ -662,3 +713,200 @@ speedups:  simd = 4.99x, portable simd = 4.71x, portable simd (std thread) = 12.
 comparisons: simd/portable = 0.94x, simd/portable(std thread) = 2.53x
 simd portable (std thread) is 2.68x faster than simd portable (single-thread)
 ```
+
+
+
+## Thursday, 18th Sept 2025
+
+For data parallelism in Rust the [Rayon](https://github.com/rayon-rs/rayon) library gets good reviews.
+
+
+Only a few small differences between the std::thread version.
+
+```rust
+/// Compute the average of a slice of f32s using portable SIMD (8 lanes)
+/// using rayon for parallelism.
+pub fn average_float_portable_simd_rayon(data: &[f32]) -> f32 {
+    use rayon::prelude::*;
+    use std::simd::Simd;
+    use std::simd::prelude::SimdFloat;
+    // 16 lanes of f32 in one SIMD vector
+    type Vf32 = Simd<f32, 16>;
+    const LANES: usize = 16;
+
+    let len = data.len();
+    if len == 0 {
+        return 0.0;
+    }
+
+    // Use rayon to parallelize the computation
+    let total_sum: f32 = data
+        .par_chunks(1024 * LANES) // process in chunks of 1024 vectors
+        .map(|chunk| {
+            // Each thread computes its own SIMD sum
+            let mut sum = Vf32::splat(0.0);
+            let chunks = chunk.len() / LANES;
+            for i in 0..chunks {
+                let start = i * LANES;
+                let v = Vf32::from_slice(&chunk[start..start + LANES]);
+                sum += v;
+            }
+            // Horizontal reduction
+            let mut partial = sum.reduce_sum();
+            // Handle remainder
+            for &x in &chunk[chunks * LANES..] {
+                partial += x;
+            }
+            partial
+        })
+        .sum();
+
+    total_sum / (len as f32)
+}
+```
+
+
+```rust
+average_serial = 0.200820, average = 0.199793, average_portable = 0.200052, average_portable_rayon = 0.199998
+diffs: serial-simd = 0.001028, serial-portable = 0.000769, simd-portable = 0.000259, serial-rayon = 0.000822, portable-rayon = 0.000054, simd-rayon = 0.000205
+serial:          v = 0.200820, elapsed = 0.624 ms
+serial:          v = 0.200820, elapsed = 0.624 ms
+serial:          v = 0.200820, elapsed = 0.624 ms
+serial:          v = 0.200820, elapsed = 0.624 ms
+serial:          v = 0.200820, elapsed = 0.624 ms
+simd:            v = 0.199793, elapsed = 0.183 ms
+simd:            v = 0.199793, elapsed = 0.183 ms
+simd:            v = 0.199793, elapsed = 0.183 ms
+simd:            v = 0.199793, elapsed = 0.183 ms
+simd:            v = 0.199793, elapsed = 0.183 ms
+portable simd:   v = 0.200052, elapsed = 0.052 ms
+portable simd:   v = 0.200052, elapsed = 0.052 ms
+portable simd:   v = 0.200052, elapsed = 0.052 ms
+portable simd:   v = 0.200052, elapsed = 0.052 ms
+portable simd:   v = 0.200052, elapsed = 0.048 ms
+portable simd std thread:   v = 0.200007, elapsed = 0.138 ms
+portable simd std thread:   v = 0.200007, elapsed = 0.153 ms
+portable simd std thread:   v = 0.200007, elapsed = 0.266 ms
+portable simd std thread:   v = 0.200007, elapsed = 0.154 ms
+portable simd std thread:   v = 0.200007, elapsed = 0.144 ms
+portable simd rayon:        v = 0.199998, elapsed = 0.036 ms
+portable simd rayon:        v = 0.199998, elapsed = 0.036 ms
+portable simd rayon:        v = 0.199998, elapsed = 0.029 ms
+portable simd rayon:        v = 0.199998, elapsed = 0.030 ms
+portable simd rayon:        v = 0.199998, elapsed = 0.028 ms
+avg times: serial = 0.624 ms, simd = 0.183 ms, portable simd = 0.051 ms, portable simd (std thread) = 0.171 ms, portable simd (rayon) = 0.032 ms
+speedups:  simd = 3.41x, portable simd = 12.25x, portable simd (std thread) = 3.65x, portable simd (rayon) = 19.72x
+comparisons: simd/portable = 3.59x, simd/portable(std thread) = 1.07x, simd/rayon = 5.78x, portable/rayon = 1.61x
+simd portable (std thread) is 0.30x faster than simd portable (single-thread)
+simd portable (rayon) is 1.61x faster than simd portable (single-thread)
+```
+
+Pretty good really. On the 2MB size of data, Rayon increased the speed of the 
+computation instead of decreasing it with my basic std::thread implementation.
+
+Well... I did cheat by starting the threads before the benchmark. Without that
+it was only a tiny bit faster, but still the thread creation took a lot of the
+time.
+
+
+
+## Friday, 19th Sept 2025
+
+
+In an issue asking to [set the default from logical cores to physical cores](https://github.com/rayon-rs/rayon/issues/693) 
+this answer was quite good.
+
+> Defaults are hard, and the benefits of hyper-threading really depend on your workload. If your computation makes full use of the core's execution units already, then adding HT won't have room to increase throughput. But if your computation has stalls for memory or the like, then HT might be able to fill that time with other work.
+
+
+So I made a little function to use the num_cpus crate to get the number of physical cores.
+
+```rust
+/// Configure Rayon to use only physical cores.
+/// This should be called once at the start of the program, before any Rayon work is done
+pub fn use_physical_cores_rayon() {
+    // Set Rayon to use physical cores only
+    let physical_cores = num_cpus::get_physical();
+    if physical_cores > 0 {
+        let _ = rayon::ThreadPoolBuilder::new()
+            .num_threads(physical_cores)
+            .build_global();
+    }
+}
+```
+
+I'd like to configure amount of cores used based on a per function decision.
+But for testing this is ok.
+
+The Macbook air doesn't use hyperthreading.
+
+On the Surface Book 3 on Windows (not WSL Ubuntu),
+I see peak speedups move from 2.6x to 2.8x faster. Showing that this is memory bottlenecked.
+
+A quote from Carmack in 2007.
+> Throwing threads at a CPU‐bound problem just moves the bottleneck into the memory system.
+
+What this doesn't quote doesn't cover is that you could use 8x the energy to 
+process these CPU bound problems with more threads.
+
+
+### Number of CPUS... or number of memory channels?
+
+If we are memory bottlenecked, do we need to use all the CPU cores?
+
+No. One thread per memory channel is enough.
+As a benefit we get more consistent performance.
+
+Well, on a single user quiet system anyway.
+On a multi user system, other workloads influence things too.
+
+Is there a rust crate to detect the number of memory channels in the system?
+Not that I could find. One could be made with a bunch of platform specific code.
+But it would require bios parsing or a DB of motherboard/CPUs.
+
+On windows you can query the Win32_PhysicalMemoryArray and Win32_PhysicalMemory.
+On linux you could probably look at EDAC sysfs.
+Apple doesn't even publish this information, people reverse engineered it from benchmarking.
+
+How to get this then? Benchmarking, and tuning.
+
+### Containers and VMs
+
+In Kubernetes with Linux nodes, they use cgroups to limit the amount of CPUs given
+to a node.
+
+I couldn't find an existing crate to detect process was running.
+
+Apart from linux, Kubernetes on Windows nodes uses Job Objects for CPU caps.
+
+### Numa awareness
+
+There's a long [NUMA issue for rayon](https://github.com/rayon-rs/rayon/issues/319).
+
+A library that helps with numa awareness and rayon: https://github.com/ulagbulag/sas
+
+Requires thinking where the memory is allocated.
+
+It's possible to see 2x-20x improvements with NUMA awareness on NUMA systems.
+
+
+# The end
+
+My main take aways and learnings.
+
+- Detecting platforms and architecture specific compilation is pretty good in rust
+  - It's quite possible to use architecture specific code if you need to.
+- Portable SIMD is great, but still unstable and in rust nightly.
+  - lets you code SIMD algorithms without unsafe
+  - Is portable (was zero work to get it working on my arm mac and intel pc with same code)
+  - Let's you easily tweak lanes
+- avx512 is in rust stable now
+- There's not anything like Halide to easily tweak scheduling separately to the algo
+  - But with Portable SIMD, and rayon it's someway there.
+- There are some NUMA aware codes for rust, but not common or built in
+- There's nothing in rust to detect a good amount of threads to allocate inside containers or VMs
+  - golang has this now
+- There's no way built into rayon to detect logical cores, but there is num_cpu crate
+- There's no crate to detect memory channels
+  - I don't think this is a thing on any system, but could save a lot of resources
+  - knowing the algo is memory limited and using more threads than memory channels is a waste
