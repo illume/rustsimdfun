@@ -207,11 +207,25 @@ pub fn average_float_portable_simd_std_thread(data: &[f32]) -> f32 {
     total_sum / (len as f32)
 }
 
-/// Compute the average of a slice of f32s using portable SIMD (8 lanes).
+/// Configure Rayon to use only physical cores.
+/// This should be called once at the start of the program, before any Rayon work is done
+pub fn use_physical_cores_rayon() {
+    // Set Rayon to use physical cores only
+    let physical_cores = num_cpus::get_physical();
+    if physical_cores > 0 {
+        let _ = rayon::ThreadPoolBuilder::new()
+            .num_threads(physical_cores)
+            .build_global();
+    }
+}
+
+/// Compute the average of a slice of f32s using portable SIMD (8 lanes)
+/// using rayon for parallelism.
 pub fn average_float_portable_simd_rayon(data: &[f32]) -> f32 {
     use rayon::prelude::*;
     use std::simd::Simd;
     use std::simd::prelude::SimdFloat;
+
     // 16 lanes of f32 in one SIMD vector
     type Vf32 = Simd<f32, 16>;
     const LANES: usize = 16;
@@ -333,6 +347,8 @@ fn main() {
         );
         portable_simd_std_thread_total_ms += ms;
     }
+
+    use_physical_cores_rayon();
 
     // warmup, this also starts rayon threads
     let vv = average_float_portable_simd_rayon(&data);
